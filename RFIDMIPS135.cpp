@@ -11,7 +11,7 @@ Constructor de la clase que recibe parametros de varios pines.
 */
 RFID::RFID(byte _LEDverde, byte _LEDrojo, byte _Buzzer, byte _Relay)
 {
-   Serial.begin(9600);
+   Serial.begin(115200);
    /*El ESP8266 simula la eeprom en la memoria flash, debe indicarse 
    cuanta memoria se alojara con EEPROM.begin()*/
    EEPROM.begin(512);
@@ -39,17 +39,28 @@ caracteres ASCII a hexadecimal.
 */
 String RFID::getUID()
 {
-   String content = "";
-   byte *buffer = mfrc522.uid.uidByte; //Datos de UID
-   byte bufferSize = mfrc522.uid.size; //Tamagno de UID
-   for (byte i = 0; i < bufferSize; i++)
-   {
-      content.concat(String(buffer[i] < 0x10 ? " 0" : ":"));
-      content.concat(String(buffer[i], HEX));
-   }
-   content.toUpperCase();
-   Serial.println(content);
-   return content.substring(1);
+      String content = "";
+      byte *buffer = mfrc522.uid.uidByte; //Datos de UID
+      byte bufferSize = mfrc522.uid.size; //Tamagno de UID
+      for (byte i = 0; i < bufferSize; i++)
+      {
+        content.concat(String(buffer[i] < 0x10 ? " 0" : ":"));
+        content.concat(String(buffer[i], HEX));
+      }
+      content.toUpperCase();
+      
+      //Serial.println(content);
+      return content.substring(1);
+}
+
+String RFID::getUIDSecure(){
+  if (mfrc522.PICC_IsNewCardPresent()){
+    if (mfrc522.PICC_ReadCardSerial()) {
+      UID = getUID();
+      return UID;
+      mfrc522.PICC_HaltA();
+    }
+  }
 }
 
 /*
@@ -72,6 +83,8 @@ Este metodo se encarga de abrir o cerar la cerradura
 */
 void RFID::operarCerradura()
 {
+   if (mfrc522.PICC_IsNewCardPresent()) {
+   if (mfrc522.PICC_ReadCardSerial()) {
    Serial.println();
    Serial.print("Message : ");
    if (validarLlave(getUID())) //Se valida la llave
@@ -94,13 +107,16 @@ void RFID::operarCerradura()
       digitalWrite(LEDrojo, LOW);
       noTone(Buzzer);
    }
+   mfrc522.PICC_HaltA();
+    }
+  }
 }
 
 /*
 Metodo utilizado para escribir una nueva llave en la EEPROM
 */
 boolean RFID::addCard(){
-   while (!mfrc522.PICC_IsNewCardPresent()) //Mientras no se acerca una nueva llave.
+  /* while (!mfrc522.PICC_IsNewCardPresent()) //Mientras no se acerca una nueva llave.
    {
       digitalWrite(LEDrojo, HIGH);
       delay(300);
@@ -108,15 +124,16 @@ boolean RFID::addCard(){
       digitalWrite(LEDverde, HIGH);
       delay(300);
       digitalWrite(LEDverde, LOW);
-   }
+   }*/
 
-   if (mfrc522.PICC_ReadCardSerial()){ //Selecciona la llave cercana
-   
-      if (!validarLlave(getUID())){ //Se verifica que la llave no exista en la EEPROM;
-         if (cantidadLlaves == 0){
-            EEPROM.put(0, getUID());
+  // if (mfrc522.PICC_ReadCardSerial()){ //Selecciona la llave cercana
+      Serial.println(UID);
+      UID = "";
+      if (!validarLlave(UID) && UID.length() > 0){ //Se verifica que la llave no exista en la EEPROM;
+         if (totalLlaves == 0){
+            EEPROM.put(0, UID);
          }else{
-            EEPROM.put(sizeof(String) * cantidadLlaves, getUID()); //Se desplaza a la direccion vacia despues de la ultima llave. 
+            EEPROM.put(12 * totalLlaves, UID); //Se desplaza a la direccion vacia despues de la ultima llave. 
          }
          EEPROM.commit(); //------------------Sin este comando no se escriben los cambios en la EEPROM.
          actualizarLLAVES(); //----------------Se actualiza el array LLAVES cuando una nueva es agregada.
@@ -124,11 +141,11 @@ boolean RFID::addCard(){
          mfrc522.PICC_HaltA();
          return true;
       } else{
-         Serial.println("Llave existente");
+         Serial.println("Llave existente o invalida");
       }
-      mfrc522.PICC_HaltA(); //Comando utilizado para que no lea la misma llave hasta q se aleje.
+     // mfrc522.PICC_HaltA(); //Comando utilizado para que no lea la misma llave hasta q se aleje.
       return false;
-   }
+   //}
 }
 
 /*
@@ -137,31 +154,33 @@ de la EEPROM donde estan almacendas y las
 asignas a un vector.
 */
 void RFID::actualizarLLAVES()
-{
+{  
+   totalLlaves = 0;
    String temp;
-   for (int index = 0; index < 43; index++)
+   for (int index = 0; index < 42; index++)
    {
-      EEPROM.get((sizeof(String) * index), temp); //salta de 12 en 12 buscando las llaves
+      EEPROM.get((12 * index), temp); //salta de 12 en 12 buscando las llaves
+      LLAVES[index] = temp;
       if (temp != 0)
-      {
-         LLAVES[index] = temp;
-         cantidadLlaves = index;
-         Serial.print("Cantidad de llaves: ");
-         Serial.println(index);
+      {  
+         totalLlaves++;
          Serial.println(temp);
       }
+      
    }
+   Serial.print("Cantidad de llaves: ");
+   Serial.println(totalLlaves);
 }
 
 /*
 Borra los datos de la EEPROM
 unicamente de los primeros 512 bytes usados
 */
-void RFID::limpiarEEPROM()
-{
-   for (int i = 0; i < 512; i++)
-   {
+void RFID::limpiarEEPROM(){
+   for (int i = 0; i < 512; i++){
       EEPROM.write(i, 0);
       EEPROM.commit();
    }
+   Serial.println("limpiando");
+   actualizarLLAVES();
 }
