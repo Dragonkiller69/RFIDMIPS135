@@ -38,7 +38,7 @@ Este metodo devuelve el UID de una llave RFID, conviertiendo
 caracteres ASCII a hexadecimal.
 */
 String RFID::getUID()
-{
+{  
       String content = "";
       byte *buffer = mfrc522.uid.uidByte; //Datos de UID
       byte bufferSize = mfrc522.uid.size; //Tamagno de UID
@@ -49,16 +49,24 @@ String RFID::getUID()
       }
       content.toUpperCase();
       
-      //Serial.println(content);
+     //Serial.println(content);
       return content.substring(1);
 }
 
 String RFID::getUIDSecure(){
+    //Serial.println("entra a secure");
   if (mfrc522.PICC_IsNewCardPresent()){
     if (mfrc522.PICC_ReadCardSerial()) {
+      digitalWrite(LEDverde, HIGH);
+      digitalWrite(Buzzer, HIGH);
+      delay(300);
+      digitalWrite(LEDverde, LOW);
+      digitalWrite(Buzzer, LOW);
       UID = getUID();
+      Serial.println(UID);
+     // mfrc522.PICC_HaltA();
       return UID;
-      mfrc522.PICC_HaltA();
+      
     }
   }
 }
@@ -128,8 +136,7 @@ boolean RFID::addCard(){
 
   // if (mfrc522.PICC_ReadCardSerial()){ //Selecciona la llave cercana
       Serial.println(UID);
-      UID = "";
-      if (!validarLlave(UID) && UID.length() > 0){ //Se verifica que la llave no exista en la EEPROM;
+      if (!validarLlave(UID) && UID.length() > 0 && totalLlaves < 43){ //Se verifica que la llave no exista en la EEPROM;
          if (totalLlaves == 0){
             EEPROM.put(0, UID);
          }else{
@@ -138,7 +145,7 @@ boolean RFID::addCard(){
          EEPROM.commit(); //------------------Sin este comando no se escriben los cambios en la EEPROM.
          actualizarLLAVES(); //----------------Se actualiza el array LLAVES cuando una nueva es agregada.
          Serial.println("Llave agregada");
-         mfrc522.PICC_HaltA();
+         //mfrc522.PICC_HaltA();
          return true;
       } else{
          Serial.println("Llave existente o invalida");
@@ -146,6 +153,32 @@ boolean RFID::addCard(){
      // mfrc522.PICC_HaltA(); //Comando utilizado para que no lea la misma llave hasta q se aleje.
       return false;
    //}
+}
+
+boolean RFID::borrarLlave(){
+    Serial.println(UID);
+      if (validarLlave(UID) && UID.length() > 0){ //Se verifica que la llave exista en la EEPROM;
+         String temp;
+         for (int index = 0; index < 42; index++){
+            EEPROM.get((12 * index), temp); //salta de 12 en 12 buscando las llaves
+            if (UID.equals(temp)){  
+               Serial.println("ANTIGUA");
+               Serial.println(temp);
+               EEPROM.put(12 * index, 0);
+               EEPROM.get((12 * index), temp);
+               Serial.println("NUEVA");
+               Serial.println(temp);
+            }
+         }
+
+         EEPROM.commit(); //------------------Sin este comando no se escriben los cambios en la EEPROM.
+         actualizarLLAVES(); //----------------Se actualiza el array LLAVES cuando una nueva es agregada.
+         Serial.println("Llave eliminada");
+         return true;
+      } else{
+         Serial.println("Llave no existente o invalida");
+      }
+      return false;
 }
 
 /*

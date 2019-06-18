@@ -24,7 +24,7 @@ class RFID {
 		byte Relay;
 		String UID = "";
 		int DENIED_DELAY = 1000;
-		int ACCESS_DELAY = 1000;
+		int ACCESS_DELAY = 800;
 		String LLAVES[42];
 		int totalLlaves = 0;
 		MFRC522 mfrc522;
@@ -36,6 +36,8 @@ class RFID {
 		String getUIDSecure();
 
 		boolean addCard();
+
+		boolean borrarLlave();
 
 		boolean validarLlave(String llave);
 
